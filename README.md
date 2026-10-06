@@ -34,7 +34,12 @@ automatisch mit der aktuellen Geo-Datenbank neu gebaut.
 4. Ergebnisse: Länder-Rangliste, Weltkarte, Zeitverlauf (eindeutige IPs bzw. Anfragen pro Tag/Stunde),
    ISP-Liste, Regionen und IP-Liste (mit erster/letzter Anfrage und User-Agent).
    Jede Liste lässt sich als **CSV** speichern (Excel-tauglich: Semikolon, UTF-8).
-5. Zum Beenden das Konsolenfenster schliessen oder in der Oberfläche auf *Beenden* klicken.
+5. **PDF-Report**: Der Button *PDF-Report* oben rechts erzeugt einen druckfertigen A4-Report mit den aktuellen Filtern.
+   Er enthält Titel, Zeitraum, Kennzahlen, Diagramm, Weltkarte, Zeitverlauf und Tabellen; welche Teile hinein sollen
+   und wie viele Zeilen, wählst du im Dialog. Upload-Felder, Filter und Buttons erscheinen nicht im Report.
+   Im Druckdialog als Ziel **„Als PDF speichern“** (Edge/Chrome) oder **„Microsoft Print to PDF“** wählen.
+   Der Dateiname wird aus Titel und Zeitraum vorgeschlagen.
+6. Zum Beenden das Konsolenfenster schliessen oder in der Oberfläche auf *Beenden* klicken.
 
 Alles läuft lokal. Es werden keine Daten ins Internet gesendet, und die Geo-Datenbank steckt in der EXE.
 

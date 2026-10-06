@@ -18,6 +18,8 @@
     </div>
   </div>
   <div class="top-actions">
+    <button class="btn" id="btn-report" title="Report mit aktuellen Filtern als PDF speichern" disabled>
+      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" style="vertical-align:-2px;margin-right:4px"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm7 0v5h5M9 13h6M9 17h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF-Report</button>
     <button class="btn ghost" id="btn-reset" title="Alle geladenen Daten verwerfen">Daten verwerfen</button>
     <button class="btn ghost" id="btn-quit" title="Programm beenden">Beenden</button>
   </div>
@@ -143,6 +145,31 @@
   Karte: Natural Earth · Alles läuft lokal, es werden keine Daten ins Internet gesendet.
 </footer>
 
+<dialog id="report-dlg">
+  <form method="dialog">
+    <h2>PDF-Report erstellen</h2>
+    <p class="muted small">Der Report enthält die aktuell gewählten Filter (Zeitraum, Status, Land/ISP …). Im folgenden Druckdialog als Ziel <b>„Als PDF speichern“</b> bzw. <b>„Microsoft Print to PDF“</b> wählen.</p>
+    <label class="lbl" for="r-title">Titel</label>
+    <input type="text" id="r-title" placeholder="z.B. Zugriffe www.example.ch – August 2026">
+    <fieldset>
+      <legend class="lbl">Inhalt</legend>
+      <label class="check"><input type="checkbox" data-r="bars" checked> Diagramm Top-Länder</label>
+      <label class="check"><input type="checkbox" data-r="map" checked> Weltkarte</label>
+      <label class="check"><input type="checkbox" data-r="timeline" checked> Zeitverlauf</label>
+      <label class="check"><input type="checkbox" data-r="countries" checked> Tabelle Länder <select data-n="countries"><option>25</option><option selected>50</option><option>100</option><option value="0">alle</option></select></label>
+      <label class="check"><input type="checkbox" data-r="isps" checked> Tabelle ISP / Provider <select data-n="isps"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+      <label class="check" id="r-regions-row"><input type="checkbox" data-r="regions" checked> Tabelle Regionen <select data-n="regions"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+      <label class="check"><input type="checkbox" data-r="ips"> Tabelle IP-Adressen <select data-n="ips"><option>25</option><option selected>50</option><option>100</option><option>250</option></select></label>
+      <label class="check"><input type="checkbox" data-r="files"> Liste der eingelesenen Dateien</label>
+    </fieldset>
+    <div class="dlg-actions">
+      <button class="btn ghost" value="cancel">Abbrechen</button>
+      <button class="btn" value="ok" id="r-go">PDF erstellen …</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="print-root" aria-hidden="true"></div>
 <div id="tip" class="tip" hidden></div>
 <script src="app.js"></script>
 </body>

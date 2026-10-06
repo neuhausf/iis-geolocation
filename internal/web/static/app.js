@@ -49,6 +49,7 @@ async function init() {
   try {
     const info = await api("/api/info");
     S.hasCity = info.hasCity;
+    S.dbs = info.dbs;
     $("#opt-xff").checked = store.get("xff", info.defaultXff);
     $("#ver").textContent = "iis-geo " + info.version;
     $("#dbinfo").textContent = info.dbs.map(d => `${d.kind}: ${d.type} (Stand ${d.built.slice(0, 10)}${d.source !== "eingebettet" ? ", " + d.source : ""})`).join(" · ")
@@ -98,6 +99,7 @@ function showProgress(label, frac, error) {
 }
 
 function renderFiles(files) {
+  S.files = files;
   const box = $("#files-box");
   box.hidden = !files.length;
   if (!files.length) return;
@@ -172,6 +174,7 @@ async function refresh() {
 }
 
 function showEmpty(empty) {
+  $("#btn-report").disabled = empty;
   $("#empty").hidden = !empty;
   $("#results").hidden = empty;
   if (empty) { S.initialized = false; S.base = S.drill = null; }
@@ -315,14 +318,10 @@ function renderMap() {
   }).join("") + `<span><span class="sw" style="background:var(--no-data)"></span>keine</span>`;
 }
 
-function renderTimeline() {
-  const d = S.drill, pts = d.timeline || [], mode = S.tlMode;
-  const el = $("#timeline");
-  const what = mode === "ips" ? "Eindeutige IP-Adressen" : "Anfragen";
-  $("#tl-title").textContent = `${what} pro ${d.unit === "hour" ? "Stunde" : "Tag"}`;
-  $("#tl-sub").textContent = (hasDrill() ? `${S.countryName || S.ispName || S.region} · ` : "") + d.tzName;
-  if (!pts.length) { el.innerHTML = `<div class="muted">Keine Daten.</div>`; return; }
-  const W = Math.max(320, el.clientWidth || 800), H = 240, m = { l: 56, r: 12, t: 12, b: 26 };
+// Zeitverlauf als SVG-Text (für Bildschirm und Report)
+function timelineSVG(d, mode, W, interactive) {
+  const pts = d.timeline;
+  const H = 240, m = { l: 56, r: 12, t: 12, b: 26 };
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
   const vals = pts.map(p => p[mode]);
   const niceMax = v => { if (v <= 5) return 5; const p = Math.pow(10, Math.floor(Math.log10(v))); const s = [1, 2, 2.5, 5, 10].find(s => s * p >= v); return s * p; };
@@ -351,7 +350,21 @@ function renderTimeline() {
     const line = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(p[mode]).toFixed(1)}`).join("");
     marks = `<path class="area" d="${line}L${x(pts.length - 1)} ${m.t + ih}L${x(0)} ${m.t + ih}Z"/><path class="line" d="${line}"/>`;
   }
-  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${what} im Zeitverlauf"><g class="axis">${g}</g>${marks}<line class="cross" id="tl-cross" y1="${m.t}" y2="${m.t + ih}" visibility="hidden"/><circle class="dot" id="tl-dot" r="4.5" visibility="hidden"/><rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="tl-hit"/></svg>`;
+  const what = mode === "ips" ? "Eindeutige IP-Adressen" : "Anfragen";
+  const svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${what} im Zeitverlauf"><g class="axis">${g}</g>${marks}${interactive ? `<line class="cross" id="tl-cross" y1="${m.t}" y2="${m.t + ih}" visibility="hidden"/><circle class="dot" id="tl-dot" r="4.5" visibility="hidden"/><rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="tl-hit"/>` : ""}</svg>`;
+  return { svg, W, m, iw, columns, x, y, xc };
+}
+
+function renderTimeline() {
+  const d = S.drill, pts = d.timeline || [], mode = S.tlMode;
+  const el = $("#timeline");
+  const what = mode === "ips" ? "Eindeutige IP-Adressen" : "Anfragen";
+  $("#tl-title").textContent = `${what} pro ${d.unit === "hour" ? "Stunde" : "Tag"}`;
+  $("#tl-sub").textContent = (hasDrill() ? `${S.countryName || S.ispName || S.region} · ` : "") + d.tzName;
+  if (!pts.length) { el.innerHTML = `<div class="muted">Keine Daten.</div>`; return; }
+  const W = Math.max(320, el.clientWidth || 800);
+  const { svg: svgText, m, iw, columns, x, y, xc } = timelineSVG(d, mode, W, true);
+  el.innerHTML = svgText;
   const svg = $("svg", el), cross = $("#tl-cross", el), dot = $("#tl-dot", el);
   $("#tl-hit", el).addEventListener("mousemove", e => {
     const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * W / r.width;
@@ -469,6 +482,128 @@ function exportCSV(type) {
   const a = document.createElement("a"); a.href = u; a.download = ""; document.body.appendChild(a); a.click(); a.remove();
 }
 
+// ---------- PDF-Report (Druckansicht) ----------
+const REPORT_DEFAULTS = { bars: true, map: true, timeline: true, countries: true, isps: true, regions: true, ips: false, files: false, n: { countries: "50", isps: "25", regions: "25", ips: "50" }, title: "" };
+const reportOpts = () => ({ ...REPORT_DEFAULTS, ...store.get("report", {}), n: { ...REPORT_DEFAULTS.n, ...(store.get("report", {}).n || {}) } });
+const dDate = v => v ? v.replace(/^(\d{4})-(\d\d)-(\d\d)[T ]?/, "$3.$2.$1 ").trim() : "";
+
+function openReportDialog() {
+  const o = reportOpts(), dlg = $("#report-dlg");
+  $$("[data-r]", dlg).forEach(c => { c.checked = !!o[c.dataset.r]; });
+  $$("[data-n]", dlg).forEach(sel => { sel.value = o.n[sel.dataset.n]; });
+  $("#r-title").value = o.title || "";
+  $("#r-regions-row").hidden = !S.hasCity;
+  dlg.showModal();
+}
+
+function reportTable(cols, rows, limit, total) {
+  const n = +limit > 0 ? Math.min(+limit, rows.length) : rows.length;
+  const more = (total ?? rows.length) - n;
+  return `<table class="r-table"><thead><tr>${cols.map(c => `<th class="${c.num ? "num" : ""}">${esc(c.l)}</th>`).join("")}</tr></thead><tbody>`
+    + (n ? rows.slice(0, n).map((r, i) => `<tr>${cols.map(c => `<td class="${c.num ? "num" : ""}${c.cls ? " " + c.cls : ""}">${c.h(r, i)}</td>`).join("")}</tr>`).join("")
+      : `<tr><td colspan="${cols.length}" class="muted">Keine Einträge.</td></tr>`)
+    + `</tbody></table>` + (more > 0 ? `<div class="r-more">… und ${fmt(more)} weitere (vollständige Liste per CSV-Export)</div>` : "");
+}
+
+function buildReport(o) {
+  const b = S.base, d = S.drill;
+  if (!b || !d) return;
+  const pct = (n, t) => pf.format(n * 100 / Math.max(1, t)) + " %";
+  const statusTxt = S.status.size ? STATUS.filter(([c]) => S.status.has(c)).map(x => x[1]).join(", ") : "alle";
+  const drill = [S.country && `Land: ${S.countryName || S.country}`, S.asn && `ISP: ${S.ispName || "AS" + S.asn}`, S.region && `Region: ${S.region}`].filter(Boolean).join(" · ");
+  const files = (S.files || []).filter(f => f.parsed > 0);
+  const lines = files.reduce((a, f) => a + f.parsed, 0);
+  const now = new Date();
+  const p2 = n => String(n).padStart(2, "0");
+  const created = `${p2(now.getDate())}.${p2(now.getMonth() + 1)}.${now.getFullYear()} ${p2(now.getHours())}:${p2(now.getMinutes())}`;
+  const from = S.from || S.dataFrom, to = S.to || S.dataTo;
+  const real = b.countries.filter(c => c.cc.length === 2);
+  const top = real[0];
+  const meta = [
+    ["Zeitraum", `${dDate(from)} – ${dDate(to)} <span class="muted">(Ende exklusiv)</span>`],
+    ["Zeitzone", esc(b.tzName)],
+    ["HTTP-Status", esc(statusTxt)],
+    ["Interne IP-Adressen", S.excludePrivate ? "ausgeblendet" : "mitgezählt"],
+    ...(drill ? [["Eingeschränkt auf", `<b>${esc(drill)}</b>`]] : []),
+    ["Datenbasis", `${fmt(files.length)} Logdatei(en), ${fmt(lines)} Zeilen, Daten vom ${dDate(S.dataFrom)} bis ${dDate(S.dataTo)}`],
+  ];
+  let h = `<header class="r-head"><div class="r-brand"><svg viewBox="0 0 32 32" width="18" height="18" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="var(--series-1)"/><path d="M2 16h28M16 2c-5 4-5 24 0 28M16 2c5 4 5 24 0 28" stroke="#fff" stroke-width="2" fill="none"/></svg>IIS-Geolokalisierung</div><div class="muted">Erstellt am ${created}</div></header>
+  <h1 class="r-title">${esc(o.title || "Zugriffe nach Herkunftsland")}</h1>
+  <table class="r-meta">${meta.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("")}</table>
+  <div class="r-kpis">
+    <div class="kpi"><div class="kpi-label">Eindeutige IP-Adressen</div><div class="kpi-value">${fmt(d.ips)}</div></div>
+    <div class="kpi"><div class="kpi-label">Anfragen</div><div class="kpi-value">${fmt(d.hits)}</div></div>
+    <div class="kpi"><div class="kpi-label">Länder</div><div class="kpi-value">${fmt(real.length)}</div></div>
+    <div class="kpi"><div class="kpi-label">Spitzenreiter</div><div class="kpi-value kpi-text">${top ? `${esc(top.name)} (${pct(top.ips, b.ips)})` : "–"}</div></div>
+  </div>`;
+  const sec = (title, sub, body, cls = "") => `<section class="r-sec ${cls}"><h2>${esc(title)}</h2>${sub ? `<div class="muted r-sub">${sub}</div>` : ""}${body}</section>`;
+
+  if (o.bars) h += sec("Länder nach eindeutigen IP-Adressen", `Top ${Math.min(15, b.countries.length)} von ${fmt(b.countries.length)}${drill && S.country ? " · hervorgehoben: " + esc(S.countryName) : ""}`, $("#bars").innerHTML, "r-keep");
+  if (o.map && $("#map svg")) h += sec("Weltkarte", "Eindeutige IP-Adressen pro Land", `<div class="map">${$("#map svg").outerHTML}</div><div class="legend">${$("#map-legend").innerHTML}</div>`, "r-keep");
+  if (o.timeline && d.timeline && d.timeline.length) {
+    const unit = d.unit === "hour" ? "Stunde" : "Tag";
+    h += sec(`Eindeutige IP-Adressen pro ${unit}`, esc(d.tzName) + (drill ? " · " + esc(drill) : ""), `<div class="timeline">${timelineSVG(d, "ips", 760, false).svg}</div>`, "r-keep");
+    h += sec(`Anfragen pro ${unit}`, esc(d.tzName) + (drill ? " · " + esc(drill) : ""), `<div class="timeline">${timelineSVG(d, "hits", 760, false).svg}</div>`, "r-keep");
+  }
+  if (o.countries) h += sec("Länder", "Rangliste nach Anzahl eindeutiger IP-Adressen", reportTable([
+    { l: "#", num: true, h: (r, i) => i + 1 },
+    { l: "Land", h: r => esc(r.name) + (r.cc.length === 2 ? ` <span class="tag">${esc(r.cc)}</span>` : "") },
+    { l: "IP-Adressen", num: true, h: r => fmt(r.ips) },
+    { l: "Anteil", num: true, h: r => pct(r.ips, b.ips) },
+    { l: "Anfragen", num: true, h: r => fmt(r.hits) },
+    { l: "Anfragen/IP", num: true, h: r => pf.format(r.hits / r.ips) },
+  ], b.countries, o.n.countries));
+  if (o.isps) h += sec("ISP / Provider", drill ? esc(drill) : "laut ASN-Datenbank", reportTable([
+    { l: "#", num: true, h: (r, i) => i + 1 },
+    { l: "ISP / Organisation", h: r => esc(r.org) },
+    { l: "ASN", num: true, h: r => r.asn ? "AS" + r.asn : "–" },
+    { l: "Land", h: r => esc(r.cc) },
+    { l: "IP-Adressen", num: true, h: r => fmt(r.ips) },
+    { l: "Anteil", num: true, h: r => pct(r.ips, d.ips) },
+    { l: "Anfragen", num: true, h: r => fmt(r.hits) },
+  ], d.isps, o.n.isps));
+  if (o.regions && S.hasCity) h += sec("Regionen", drill ? esc(drill) : "Kanton / Bundesland / Provinz (Näherungswerte)", reportTable([
+    { l: "#", num: true, h: (r, i) => i + 1 },
+    { l: "Region", h: r => esc(r.region) },
+    { l: "Land", h: r => esc(r.cc) },
+    { l: "IP-Adressen", num: true, h: r => fmt(r.ips) },
+    { l: "Anteil", num: true, h: r => pct(r.ips, d.ips) },
+    { l: "Anfragen", num: true, h: r => fmt(r.hits) },
+  ], d.regions, o.n.regions));
+  if (o.ips) h += sec("IP-Adressen mit den meisten Anfragen", drill ? esc(drill) : "", reportTable([
+    { l: "IP-Adresse", h: r => esc(r.ip), cls: "mono" },
+    { l: "Land", h: r => r.private ? "Privat / intern" : esc(r.country || "Unbekannt") },
+    ...(S.hasCity ? [{ l: "Region / Stadt", h: r => esc([r.region, r.city].filter(Boolean).join(" · ")) }] : []),
+    { l: "ISP / Organisation", h: r => esc(r.org) },
+    { l: "Anfragen", num: true, h: r => fmt(r.hits) },
+    { l: "Erste", h: r => esc(r.first), cls: "nowrap" },
+    { l: "Letzte", h: r => esc(r.last), cls: "nowrap" },
+  ], d.ipRows, o.n.ips, d.ipTotal));
+  if (o.files) h += sec("Eingelesene Dateien", "", reportTable([
+    { l: "Datei", h: r => esc(r.name), cls: "mono" },
+    { l: "Zeilen", num: true, h: r => fmt(r.parsed) },
+    { l: "Zeitraum (UTC)", h: r => r.from ? new Date(r.from * 1000).toISOString().slice(0, 16).replace("T", " ") + " – " + new Date(r.to * 1000).toISOString().slice(0, 16).replace("T", " ") : "", cls: "nowrap" },
+  ], files, 0));
+  const dbs = (S.dbs || []).map(x => `${x.type} (Stand ${dDate(x.built.slice(0, 10))})`).join(", ");
+  h += `<footer class="r-foot">„Eindeutige IP-Adressen“ zählt jede Adresse im Filter einmal, „Anfragen“ zählt Logzeilen. Geolokalisierung: IP Geolocation by DB-IP (db-ip.com, CC BY 4.0)${dbs ? " – " + esc(dbs) : ""}. Erstellt mit iis-geo ${esc(window.VERSION)}.</footer>`;
+  $("#print-root").innerHTML = h;
+}
+
+let savedTitle = null;
+function reportFileTitle(o) {
+  const from = (S.from || S.dataFrom).slice(0, 10), to = (S.to || S.dataTo).slice(0, 10);
+  const base = (o.title || "IIS-Geo-Report").replace(/[\\/:*?"<>|]+/g, "-").trim();
+  return `${base} ${from} bis ${to}`;
+}
+addEventListener("beforeprint", () => {
+  if (!S.base) { $("#print-root").innerHTML = ""; return; }
+  const o = reportOpts();
+  buildReport(o);
+  savedTitle = document.title;
+  document.title = reportFileTitle(o); // Vorschlag für den PDF-Dateinamen
+});
+addEventListener("afterprint", () => { if (savedTitle !== null) { document.title = savedTitle; savedTitle = null; } });
+
 // ---------- Events ----------
 function bind() {
   const input = $("#file-input");
@@ -539,6 +674,17 @@ function bind() {
     renderTable();
   });
   $("#t-export").addEventListener("click", () => exportCSV(S.tab));
+  $("#btn-report").addEventListener("click", openReportDialog);
+  $("#report-dlg").addEventListener("close", () => {
+    const dlg = $("#report-dlg");
+    if (dlg.returnValue !== "ok") return;
+    const o = { n: {} };
+    $$("[data-r]", dlg).forEach(c => { o[c.dataset.r] = c.checked; });
+    $$("[data-n]", dlg).forEach(sel => { o.n[sel.dataset.n] = sel.value; });
+    o.title = $("#r-title").value.trim();
+    store.set("report", o);
+    setTimeout(() => window.print(), 50);
+  });
   $$("[data-export]").forEach(b => b.addEventListener("click", () => exportCSV(b.dataset.export)));
   let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { if (S.drill) renderTimeline(); }, 150); });
   matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (S.base) render(); });

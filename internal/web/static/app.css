@@ -211,3 +211,70 @@ td .share i { display: block; height: 100%; background: var(--series-1); border-
   .load-grid { grid-template-columns: 1fr; }
   .row { flex-direction: column; }
 }
+
+/* Report-Dialog */
+dialog#report-dlg {
+  border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; width: min(520px, calc(100vw - 32px));
+  background: var(--surface-1); color: var(--text-primary); box-shadow: 0 12px 40px rgba(0,0,0,.25);
+}
+dialog#report-dlg::backdrop { background: rgba(0,0,0,.35); }
+dialog#report-dlg h2 { margin-bottom: 6px; }
+dialog#report-dlg p { margin: 0 0 14px; }
+dialog#report-dlg input[type=text] { width: 100%; }
+dialog#report-dlg fieldset { border: 0; padding: 0; margin: 14px 0 0; display: grid; gap: 8px; }
+dialog#report-dlg .check { align-items: center; color: var(--text-primary); }
+dialog#report-dlg .check input { margin-top: 0; }
+dialog#report-dlg select { margin-left: auto; padding: 2px 6px; font-size: 12.5px; }
+.dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+/* Report (nur im Druck/PDF sichtbar) */
+#print-root { display: none; }
+.r-head { display: flex; justify-content: space-between; align-items: center; font-size: 9pt; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.r-brand { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.r-title { font-size: 19pt; margin: 14px 0 8px; font-weight: 600; }
+.r-meta { width: auto; font-size: 9.5pt; margin-bottom: 12px; }
+.r-meta th { position: static; background: none; border: 0; padding: 1px 16px 1px 0; color: var(--text-secondary); font-weight: 400; cursor: default; vertical-align: top; }
+.r-meta td { border: 0; padding: 1px 0; }
+.r-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 6px; }
+.r-kpis .kpi { box-shadow: none; padding: 8px 12px; }
+.r-kpis .kpi-value { font-size: 17pt; }
+.r-kpis .kpi-value.kpi-text { font-size: 11.5pt; padding-top: 5px; white-space: normal; }
+.r-sec { margin-top: 16px; }
+.r-sec h2 { font-size: 12.5pt; margin: 0; break-after: avoid; }
+.r-sub { font-size: 9pt; margin-bottom: 8px; break-after: avoid; }
+.r-keep { break-inside: avoid; }
+.r-sec .bars .name { cursor: default; max-width: 240px; }
+.r-sec .bars .more { display: none; }
+.r-sec .map { max-width: 168mm; margin: 0 auto; }
+.r-sec .map path { cursor: default; }
+.r-sec .timeline svg { height: auto; }
+.r-table { font-size: 9pt; }
+.r-table th { position: static; cursor: default; padding: 4px 8px; font-size: 8.5pt; }
+.r-table td { padding: 3px 8px; }
+.r-table tr { break-inside: avoid; }
+.r-table tbody tr:hover td { background: none; }
+.r-more { font-size: 8.5pt; color: var(--text-secondary); margin-top: 4px; }
+.r-foot { margin-top: 18px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 8pt; color: var(--text-secondary); }
+
+@page {
+  size: A4;
+  margin: 14mm 13mm 16mm;
+  @bottom-left { content: "IIS-Geolokalisierung – Report"; font: 8pt "Segoe UI", system-ui, sans-serif; color: #7a7974; }
+  @bottom-right { content: "Seite " counter(page) " / " counter(pages); font: 8pt "Segoe UI", system-ui, sans-serif; color: #7a7974; }
+}
+@media print {
+  /* Report immer im hellen Farbschema */
+  :root {
+    color-scheme: light !important;
+    --page: #ffffff !important; --surface-1: #ffffff !important; --surface-2: #f0efec !important;
+    --border: #dddcd7 !important; --grid: #e8e7e3 !important;
+    --text-primary: #0b0b0b !important; --text-secondary: #52514e !important; --text-muted: #7a7974 !important;
+    --series-1: #2a78d6 !important; --accent-ink: #1c5cab !important; --no-data: #e6e5e1 !important;
+    --seq-1: #cde2fb !important; --seq-2: #9ec5f4 !important; --seq-3: #6da7ec !important;
+    --seq-4: #3987e5 !important; --seq-5: #256abf !important; --seq-6: #104281 !important;
+  }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { background: #fff !important; font-size: 10pt; }
+  body > *:not(#print-root) { display: none !important; }
+  #print-root { display: block; }
+}
