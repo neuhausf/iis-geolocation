@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IIS-Geolokalisierung</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%232a78d6'/%3E%3Cpath d='M2 16h28M16 2c-5 4-5 24 0 28M16 2c5 4 5 24 0 28' stroke='white' stroke-width='2' fill='none'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css">
+<script>window.TOKEN = "{{TOKEN}}"; window.VERSION = "{{VERSION}}";</script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="var(--series-1)"/><path d="M2 16h28M16 2c-5 4-5 24 0 28M16 2c5 4 5 24 0 28" stroke="var(--surface-1)" stroke-width="2" fill="none"/></svg>
+    <div>
+      <h1>IIS-Geolokalisierung</h1>
+      <div class="muted small" id="dbinfo">Datenbanken werden geladen …</div>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button class="btn ghost" id="btn-reset" title="Alle geladenen Daten verwerfen">Daten verwerfen</button>
+    <button class="btn ghost" id="btn-quit" title="Programm beenden">Beenden</button>
+  </div>
+</header>
+
+<main>
+  <section class="card" id="load-card">
+    <div class="load-grid">
+      <label class="drop" id="drop">
+        <input type="file" id="file-input" multiple accept=".log,.txt,.gz,.zip">
+        <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span><strong>Logdateien hierher ziehen</strong> oder klicken zum Auswählen</span>
+        <span class="muted small">*.log, auch mehrere gleichzeitig; *.gz und *.zip werden entpackt</span>
+      </label>
+      <div class="path-box">
+        <label for="path-input" class="lbl">… oder Ordner / Datei / Muster direkt einlesen (schneller bei grossen Logs)</label>
+        <div class="row">
+          <input type="text" id="path-input" placeholder="z.B. C:\inetpub\logs\LogFiles\W3SVC1  oder  D:\Logs\u_ex2608*.log" spellcheck="false">
+          <button class="btn" id="btn-path">Einlesen</button>
+        </div>
+        <div class="muted small">Ordner werden inkl. Unterordnern durchsucht. Mehrere Pfade mit <code>;</code> trennen.</div>
+        <label class="check"><input type="checkbox" id="opt-xff" checked> Client-IP aus <code>X-Forwarded-For</code> verwenden, falls im Log vorhanden (Reverse-Proxy / Load-Balancer)</label>
+      </div>
+    </div>
+    <div id="progress" class="progress" hidden>
+      <div class="progress-text"><span id="progress-label">Lade …</span><span id="progress-pct"></span></div>
+      <div class="bar"><div id="progress-fill"></div></div>
+    </div>
+    <details id="files-box" hidden>
+      <summary><span id="files-summary"></span></summary>
+      <div class="table-wrap small-table"><table id="files-table"><thead><tr><th>Datei</th><th class="num">Zeilen</th><th class="num">übersprungen</th><th>Zeitraum (UTC)</th><th>Hinweis</th></tr></thead><tbody></tbody></table></div>
+    </details>
+  </section>
+
+  <section id="empty" class="card empty">
+    <h2>Noch keine Daten</h2>
+    <p class="muted">Logdateien laden – danach erscheinen hier die Auswertung nach Land, Karte, Zeitverlauf, ISPs und IP-Adressen.</p>
+  </section>
+
+  <div id="results" hidden>
+    <section class="filters card">
+      <div class="f-group">
+        <label class="lbl" for="f-from">Von</label>
+        <input type="datetime-local" id="f-from" step="3600">
+      </div>
+      <div class="f-group">
+        <label class="lbl" for="f-to">Bis (exklusiv)</label>
+        <input type="datetime-local" id="f-to" step="3600">
+      </div>
+      <div class="f-group">
+        <span class="lbl">Schnellwahl</span>
+        <div class="seg" id="quick">
+          <button data-q="all">Alles</button><button data-q="24h">Letzte 24 h</button><button data-q="7d">7 Tage</button><button data-q="30d">30 Tage</button>
+        </div>
+      </div>
+      <div class="f-group">
+        <label class="lbl" for="f-tz">Zeitzone</label>
+        <select id="f-tz"><option value="utc">UTC (wie im IIS-Log)</option><option value="local">Lokalzeit</option></select>
+      </div>
+      <div class="f-group">
+        <span class="lbl">HTTP-Status</span>
+        <div class="chips" id="status-chips"></div>
+      </div>
+      <div class="f-group">
+        <span class="lbl">&nbsp;</span>
+        <label class="check"><input type="checkbox" id="f-private" checked> interne IPs ausblenden</label>
+      </div>
+    </section>
+    <div id="drill" class="drill" hidden></div>
+
+    <section class="kpis">
+      <div class="kpi"><div class="kpi-label">Eindeutige IP-Adressen</div><div class="kpi-value" id="k-ips">–</div></div>
+      <div class="kpi"><div class="kpi-label">Anfragen</div><div class="kpi-value" id="k-hits">–</div></div>
+      <div class="kpi"><div class="kpi-label">Länder</div><div class="kpi-value" id="k-countries">–</div></div>
+      <div class="kpi"><div class="kpi-label">Spitzenreiter</div><div class="kpi-value kpi-text" id="k-top">–</div></div>
+    </section>
+
+    <div class="grid2">
+      <section class="card">
+        <div class="card-head">
+          <div><h2>Länder nach IP-Adressen</h2><div class="muted small" id="countries-sub"></div></div>
+          <button class="btn small ghost" data-export="countries">CSV</button>
+        </div>
+        <div id="bars"></div>
+      </section>
+      <section class="card">
+        <div class="card-head">
+          <div><h2>Weltkarte</h2><div class="muted small">Eindeutige IP-Adressen pro Land · Klick filtert</div></div>
+        </div>
+        <div id="map" class="map"></div>
+        <div id="map-legend" class="legend"></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <div><h2 id="tl-title">Zeitverlauf</h2><div class="muted small" id="tl-sub"></div></div>
+        <div class="seg" id="tl-mode"><button data-m="ips" class="on">IP-Adressen</button><button data-m="hits">Anfragen</button></div>
+      </div>
+      <div id="timeline" class="timeline"></div>
+    </section>
+
+    <section class="card">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="countries" class="on">Alle Länder</button>
+        <button role="tab" data-tab="isps">ISP / Provider</button>
+        <button role="tab" data-tab="regions" id="tab-regions">Regionen</button>
+        <button role="tab" data-tab="ips">IP-Adressen</button>
+        <div class="tab-tools">
+          <input type="search" id="t-search" placeholder="Suchen …">
+          <button class="btn small ghost" id="t-export">CSV</button>
+        </div>
+      </div>
+      <div class="muted small" id="t-note"></div>
+      <div class="table-wrap"><table id="t-table"><thead></thead><tbody></tbody></table></div>
+    </section>
+  </div>
+</main>
+
+<footer class="muted small">
+  <span id="ver"></span> ·
+  IP-Geolokalisierung: <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a> (CC BY 4.0) ·
+  Karte: Natural Earth · Alles läuft lokal, es werden keine Daten ins Internet gesendet.
+</footer>
+
+<div id="tip" class="tip" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

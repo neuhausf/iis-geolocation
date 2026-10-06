@@ -1,0 +1,15 @@
+#Software: Microsoft Internet Information Services 10.0
+#Version: 1.0
+#Date: 2026-08-31 00:00:04
+#Fields: date time s-ip cs-method cs-uri-stem cs-uri-query s-port cs-username c-ip cs(User-Agent) cs(Referer) sc-status sc-substatus sc-win32-status sc-bytes cs-bytes time-taken crypt-protocol crypt-cipher crypt-hash crypt-keyexchange
+2026-08-30 23:59:27 172.18.102.130 POST /webservice/v2/NaregService.svc - 443 - 159.144.156.69 - - 200 0 0 3930 1632 606 400 6610 800d ae06
+2026-08-30 23:59:28 172.18.102.130 POST /webservice/v2/NaregService.svc - 443 - 159.144.156.69 - - 200 0 0 3945 1631 600 400 6610 800d ae06
+2026-08-30 23:59:35 172.18.102.130 GET /Person/Summary/28943 textCategory=22002 443 - 43.166.237.57 Mozilla/5.0+(iPhone;+CPU+iPhone+OS+13_2_3+like+Mac+OS+X)+AppleWebKit/605.1.15+(KHTML,+like+Gecko)+Version/13.0.3+Mobile/15E148+Safari/604.1 https://www.nareg.ch/Home/ChangeCulture?lang=it&returnUrl=%2FPerson%2FSummary%2F28943 200 0 0 7975 697 127 400 6610 800d ae06
+2026-08-30 23:59:41 172.18.102.130 GET /version - 443 - 58.10.154.81 Mozilla/5.0+(X11;+CrOS+x86_64+14541.0.0)+AppleWebKit/537.36+(KHTML,+like+Gecko)+Chrome/133.0.0.0+Safari/537.36 - 302 0 0 1255 214 208 400 6610 800d ae06
+2026-08-30 23:59:44 172.18.102.130 GET /Person/Summary/80380 textCategory=22002 443 - 51.154.8.227 Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64)+AppleWebKit/537.36+(KHTML,+like+Gecko)+Chrome/151.0.0.0+Safari/537.36 https://www.gesreg.admin.ch/ 200 0 0 7490 619 180 400 6610 800d ae06
+2026-08-30 23:59:57 172.18.102.130 GET / textCategory=22005&textType=21002 443 - 217.148.7.153 Mozilla/5.0+(compatible;+PRTG+Network+Monitor+(www.paessler.com);+Windows) - 200 0 0 39537 163 39 400 6610 800d ae06
+2026-08-31 00:00:02 172.18.102.130 GET /Monitoring/Job/GlnService textCategory=22002 443 - 217.148.7.153 Mozilla/5.0+(compatible;+PRTG+Network+Monitor+(www.paessler.com);+Windows) - 200 0 0 1619 251 77 400 6610 800d ae06
+2026-08-31 00:00:02 172.18.102.130 POST /webservice/v2/NaregService.svc - 443 - 193.246.80.28 - - 200 0 0 3926 1624 953 400 6610 800d ae06
+2026-08-31 00:00:02 172.18.102.130 POST /webservice/v2/NaregService.svc - 443 - 194.209.75.220 - - 200 0 0 4414 1644 1095 400 6610 800d ae06
+2026-08-31 00:00:03 172.18.102.130 POST /webservice/v2/NaregService.svc - 443 - 159.144.156.69 - - 200 0 0 4757 1632 1212 400 6610 800d ae06
+2026-08-31 00:00:04 172.18.102.130 POST /webservice/v2/NaregService.svc - 443 - 10.1.2.3 - - 404 0 0 4311 1631 1023 400 6610 800d ae06

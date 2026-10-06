@@ -1,0 +1,102 @@
+name: Build & Release
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # monatlich neu bauen, damit die eingebettete Geo-Datenbank aktuell bleibt
+    - cron: "17 4 3 * *"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Geo-Datenbanken laden (DB-IP Lite, CC BY 4.0)
+        run: tools/fetch-db.sh --city
+
+      - name: Version bestimmen
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF#refs/tags/}"; else v="$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Tests
+        run: go vet ./... && go test ./...
+
+      - name: Windows-EXE bauen
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p dist
+          ldf="-s -w -X main.version=${{ steps.ver.outputs.version }}"
+          go build -trimpath -ldflags "$ldf" -o dist/iis-geo.exe .
+          go build -trimpath -tags city -ldflags "$ldf" -o dist/iis-geo-regionen.exe .
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iis-geo-windows
+          path: dist/*.exe
+
+  smoke-test:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: iis-geo-windows
+          path: dist
+      - name: EXE auf Windows ausführen
+        shell: pwsh
+        run: |
+          .\dist\iis-geo.exe -version
+          .\dist\iis-geo.exe -cli -csv laender.csv testdata\u_ex260831.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (-not (Select-String -Path laender.csv -Pattern "Schweiz")) { throw "CSV ohne Schweiz" }
+          .\dist\iis-geo-regionen.exe -cli -csv-ips ips.csv testdata\u_ex260831.log
+          if (-not (Select-String -Path ips.csv -Pattern "Swisscom|Salt|Zurich|Geneva|Bern")) { Get-Content ips.csv; throw "keine Region/ISP" }
+
+  release:
+    needs: [build, smoke-test]
+    if: >-
+      github.event_name != 'pull_request' &&
+      (startsWith(github.ref, 'refs/tags/v') ||
+       github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: iis-geo-windows
+          path: dist
+      - name: Release veröffentlichen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          notes="Windows-Programm zum Auswerten von IIS-Logs nach Herkunftsland. Keine Installation nötig.
+
+          - **iis-geo.exe** – Land + ISP/Provider (empfohlen, ~17 MB)
+          - **iis-geo-regionen.exe** – zusätzlich Region/Kanton und Stadt (~80 MB)
+
+          Gebaut aus ${GITHUB_SHA::7} am $(date -u +%Y-%m-%d). Geo-Daten: IP Geolocation by DB-IP (https://db-ip.com), CC BY 4.0."
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            gh release create "${GITHUB_REF#refs/tags/}" dist/*.exe --title "iis-geo ${GITHUB_REF#refs/tags/}" --notes "$notes"
+          else
+            gh release delete latest --cleanup-tag -y || true
+            gh release create latest dist/*.exe --target "$GITHUB_SHA" --title "iis-geo (aktuelle Version)" --notes "$notes" --latest
+          fi
